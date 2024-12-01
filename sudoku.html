@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>数独游戏</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-image: url('sea.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .container {
+            margin: 20px;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(9, 50px);
+            gap: 1px;
+            padding: 5px;
+            background-color: #666;
+            border: 2px solid #333;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cell:hover {
+            background-color: #f8f8f8;
+        }
+
+        .cell input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            text-align: center;
+            font-size: 20px;
+            background: transparent;
+        }
+
+        .cell.fixed {
+            background-color: rgba(240, 240, 240, 0.9);
+            font-weight: bold;
+        }
+
+        .cell:nth-child(3n) {
+            border-right: 2px solid #333;
+        }
+
+        .grid>div:nth-child(27n) {
+            border-bottom: 2px solid #333;
+        }
+
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-5px);
+            }
+
+            75% {
+                transform: translateX(5px);
+            }
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        select:hover {
+            border-color: #4CAF50;
+        }
+
+        .error {
+            color: #ff3333;
+            font-weight: bold;
+            padding: 10px;
+            margin-top: 10px;
+            background-color: rgba(255, 51, 51, 0.1);
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+            padding: 10px;
+            margin-top: 10px;
+            background-color: rgba(74, 175, 80, 0.1);
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        /* 添加输入动画效果 */
+        @keyframes popIn {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .cell input.new-input {
+            animation: popIn 0.3s ease-out;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 style="text-align: center; color: #333;">数独游戏</h1>
+        <div class="info-panel">
+            <div class="timer">时间: 00:00</div>
+            <select id="difficulty">
+                <option value="easy">简单</option>
+                <option value="medium">中等</option>
+                <option value="hard">困难</option>
+            </select>
+        </div>
+        <div class="controls">
+            <button id="generate">生成新游戏</button>
+            <button id="solve">求解</button>
+            <button id="clear">清空</button>
+            <button id="verify">验证</button>
+            <button id="pause">暂停</button>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        class Sudoku {
+            constructor() {
+                this.grid = Array(9).fill().map(() => Array(9).fill(0));
+                this.solution = null;
+            }
+
+            isValid(num, pos) {
+                const [row, col] = pos;
+
+                // 检查行
+                for (let x = 0; x < 9; x++) {
+                    if (this.grid[row][x] === num && x !== col) {
+                        return false;
+                    }
+                }
+
+                // 检查列
+                for (let x = 0; x < 9; x++) {
+                    if (this.grid[x][col] === num && x !== row) {
+                        return false;
+                    }
+                }
+
+                // 检查3x3方格
+                const boxX = Math.floor(row / 3) * 3;
+                const boxY = Math.floor(col / 3) * 3;
+
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        if (this.grid[boxX + i][boxY + j] === num &&
+                            (boxX + i !== row || boxY + j !== col)) {
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            solve(grid = this.grid) {
+                let find = this.findEmpty(grid);
+                if (!find) return true;
+
+                const [row, col] = find;
+
+                for (let num = 1; num <= 9; num++) {
+                    if (this.isValid(num, [row, col])) {
+                        grid[row][col] = num;
+
+                        if (this.solve(grid)) {
+                            return true;
+                        }
+
+                        grid[row][col] = 0;
+                    }
+                }
+
+                return false;
+            }
+
+            findEmpty(grid) {
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (grid[i][j] === 0) {
+                            return [i, j];
+                        }
+                    }
+                }
+                return null;
+            }
+
+            generate(difficulty) {
+                // 生成完整的数独解
+                this.grid = Array(9).fill().map(() => Array(9).fill(0));
+                this.solve();
+                this.solution = this.grid.map(row => [...row]);
+
+                // 根据难度移除数字
+                const cellsToRemove = {
+                    'easy': 30,
+                    'medium': 45,
+                    'hard': 55
+                }[difficulty];
+
+                const positions = [];
+                for (let i = 0; i < 81; i++) {
+                    positions.push(i);
+                }
+
+                // 随机移除数字
+                for (let i = 0; i < cellsToRemove; i++) {
+                    const index = Math.floor(Math.random() * positions.length);
+                    const pos = positions.splice(index, 1)[0];
+                    const row = Math.floor(pos / 9);
+                    const col = pos % 9;
+                    this.grid[row][col] = 0;
+                }
+            }
+
+            verifyBoard() {
+                // 验证当前盘面是否合法
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        const num = this.grid[i][j];
+                        if (num !== 0) {
+                            this.grid[i][j] = 0;
+                            if (!this.isValid(num, [i, j])) {
+                                this.grid[i][j] = num;
+                                return false;
+                            }
+                            this.grid[i][j] = num;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
+
+        // UI相关代码
+        const game = new Sudoku();
+        const gridElement = document.getElementById('grid');
+        const messageElement = document.getElementById('message');
+
+        // 添加计时器功能
+        let timer = {
+            interval: null,
+            seconds: 0,
+            paused: false,
+
+            start() {
+                if (this.interval) this.stop();
+                this.seconds = 0;
+                this.paused = false;
+                this.interval = setInterval(() => {
+                    if (!this.paused) {
+                        this.seconds++;
+                        this.update();
+                    }
+                }, 1000);
+            },
+
+            stop() {
+                clearInterval(this.interval);
+                this.interval = null;
+            },
+
+            pause() {
+                this.paused = !this.paused;
+                document.getElementById('pause').textContent =
+                    this.paused ? '继续' : '暂停';
+            },
+
+            update() {
+                const minutes = Math.floor(this.seconds / 60);
+                const seconds = this.seconds % 60;
+                document.querySelector('.timer').textContent =
+                    `时间: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+        };
+
+        // 修改输入事件处理
+        function createInputHandler(input) {
+            return (e) => {
+                const value = e.target.value;
+                if (!/^[1-9]$/.test(value)) {
+                    e.target.value = '';
+                } else {
+                    input.classList.add('new-input');
+                    setTimeout(() => input.classList.remove('new-input'), 300);
+                }
+                updateGrid();
+            };
+        }
+
+        // 修改网格创建代码
+        for (let i = 0; i < 81; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.maxLength = 1;
+            input.dataset.row = Math.floor(i / 9);
+            input.dataset.col = i % 9;
+            input.addEventListener('input', createInputHandler(input));
+            cell.appendChild(input);
+            gridElement.appendChild(cell);
+        }
+
+        function updateGrid() {
+            const inputs = document.querySelectorAll('.cell input');
+            game.grid = Array(9).fill().map(() => Array(9).fill(0));
+
+            inputs.forEach(input => {
+                const row = parseInt(input.dataset.row);
+                const col = parseInt(input.dataset.col);
+                game.grid[row][col] = parseInt(input.value) || 0;
+            });
+        }
+
+        function displayGrid() {
+            const inputs = document.querySelectorAll('.cell input');
+            inputs.forEach(input => {
+                const row = parseInt(input.dataset.row);
+                const col = parseInt(input.dataset.col);
+                const value = game.grid[row][col];
+                input.value = value || '';
+                input.readOnly = value !== 0;
+                input.parentElement.className =
+                    'cell' + (value !== 0 ? ' fixed' : '');
+            });
+        }
+
+        // 修改按钮事件处理
+        document.getElementById('generate').addEventListener('click', () => {
+            const difficulty = document.getElementById('difficulty').value;
+            game.generate(difficulty);
+            displayGrid();
+            messageElement.textContent = '';
+            timer.start();
+        });
+
+        document.getElementById('solve').addEventListener('click', () => {
+            if (game.verifyBoard()) {
+                if (game.solve()) {
+                    displayGrid();
+                    messageElement.className = 'success';
+                    messageElement.textContent = '解题成功！';
+                    timer.stop();
+                } else {
+                    messageElement.className = 'error';
+                    messageElement.textContent = '此数独无解！';
+                }
+            } else {
+                messageElement.className = 'error';
+                messageElement.textContent = '当前盘面不合法！';
+            }
+        });
+
+        document.getElementById('clear').addEventListener('click', () => {
+            game.grid = Array(9).fill().map(() => Array(9).fill(0));
+            displayGrid();
+            messageElement.textContent = '';
+            timer.stop();
+        });
+
+        document.getElementById('verify').addEventListener('click', () => {
+            if (game.verifyBoard()) {
+                messageElement.className = 'success';
+                messageElement.textContent = '当前盘面合法！';
+            } else {
+                messageElement.className = 'error';
+                messageElement.textContent = '当前盘面不合法！';
+            }
+        });
+
+        document.getElementById('pause').addEventListener('click', () => {
+            timer.pause();
+        });
+
+        // 添加键盘导航功能
+        document.addEventListener('keydown', (e) => {
+            const active = document.activeElement;
+            if (!active.matches('.cell input')) return;
+
+            const row = parseInt(active.dataset.row);
+            const col = parseInt(active.dataset.col);
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (row > 0) focusCell(row - 1, col);
+                    break;
+                case 'ArrowDown':
+                    if (row < 8) focusCell(row + 1, col);
+                    break;
+                case 'ArrowLeft':
+                    if (col > 0) focusCell(row, col - 1);
+                    break;
+                case 'ArrowRight':
+                    if (col < 8) focusCell(row, col + 1);
+                    break;
+            }
+        });
+
+        function focusCell(row, col) {
+            const input = document.querySelector(
+                `.cell input[data-row="${row}"][data-col="${col}"]`
+            );
+            if (input && !input.readOnly) input.focus();
+        }
+    </script>
+</body>
+
+</html>
